@@ -1,2 +1,17 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Set the default behavior to use LF, even on Windows systems
+* text=auto eol=lf
+
+# Shell scripts should be executable
+*.sh text eol=lf executable
+*.ps1 text eol=crlf
+
+# Docker files
+Dockerfile* text eol=lf
+docker-compose.yml text eol=lf
+Caddyfile text eol=lf
+
+# Environment files
+.env text eol=lf

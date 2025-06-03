@@ -1,0 +1,251 @@
+volumes:
+  n8n_storage:
+  ollama_storage:
+  qdrant_storage:
+  open-webui:
+  flowise:
+  valkey-data:
+  supabase_db_data:
+  supabase_storage_data:
+
+networks:
+  freya-net:
+    driver: bridge
+
+x-n8n: &service-n8n
+  image: n8nio/n8n:latest
+  environment:
+    - DB_TYPE=postgresdb
+    - DB_POSTGRESDB_HOST=db
+    - DB_POSTGRESDB_USER=postgres
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_POSTGRESDB_DATABASE=postgres
+    - N8N_DIAGNOSTICS_ENABLED=false
+    - N8N_PERSONALIZATION_ENABLED=false
+    - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_JWT_SECRET}
+    - N8N_SECURE_COOKIE=false
+    - NODE_ENV=production
+  networks:
+    - freya-net
+
+x-ollama: &service-ollama
+  image: ollama/ollama:latest
+  restart: unless-stopped
+  volumes:
+    - ollama_storage:/root/.ollama
+  environment:
+    - OLLAMA_KEEP_ALIVE=24h
+    - OLLAMA_HOST=0.0.0.0
+  networks:
+    - freya-net
+
+services:
+  # Database
+  db:
+    image: supabase/postgres:15.1.0.117
+    restart: unless-stopped
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - freya-net
+
+  # Storage
+  storage:
+    image: supabase/storage-api:latest
+    depends_on:
+      - db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REGION: ${STORAGE_REGION}
+      GLOBAL_S3_BUCKET: ${STORAGE_S3_BUCKET}
+    volumes:
+      - supabase_storage_data:/var/lib/storage
+    networks:
+      - freya-net
+
+  # n8n Workflow Automation
+  n8n:
+    <<: *service-n8n
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./shared:/data/shared
+    depends_on:
+      - db
+    environment:
+      - N8N_HOST=${N8N_HOST:-0.0.0.0}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_PORT=${N8N_PORT:-5678}
+
+  # Vector Database
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - freya-net
+
+  # Flow-based Programming Tool
+  flowise:
+    image: flowiseai/flowise
+    restart: unless-stopped
+    container_name: flowise
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
+    ports:
+      - "${FLOWISE_PORT:-3001}:3001"
+    volumes:
+      - flowise:/root/.flowise
+    networks:
+      - freya-net
+
+  # Web UI for Ollama
+  open-webui-cpu:
+    profiles: ["cpu"]
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    container_name: open-webui
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    environment:
+      - OLLAMA_BASE_URLS=http://ollama-cpu:11434
+      - WEBUI_AUTH=${WEBUI_AUTH:-true}
+      - WEBUI_NAME=Freya AI
+      - WEBUI_URL=${WEBUI_URL:-http://localhost:3000}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - freya-net
+    depends_on:
+      - ollama-cpu
+
+  open-webui-gpu:
+    profiles: ["gpu-nvidia", "gpu-amd"]
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    container_name: open-webui
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    environment:
+      - OLLAMA_BASE_URLS=http://ollama-gpu:11434,http://ollama-gpu-amd:11434
+      - WEBUI_AUTH=${WEBUI_AUTH:-true}
+      - WEBUI_NAME=Freya AI
+      - WEBUI_URL=${WEBUI_URL:-http://localhost:3000}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - freya-net
+    depends_on:
+      - ollama-gpu
+      - ollama-gpu-amd
+
+  # Ollama CPU Service
+  ollama-cpu:
+    profiles: ["cpu"]
+    <<: *service-ollama
+    container_name: ollama-cpu
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+
+  # Ollama GPU Service (NVIDIA)
+  ollama-gpu:
+    profiles: ["gpu-nvidia"]
+    <<: *service-ollama
+    container_name: ollama-gpu
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Ollama GPU Service (AMD)
+  ollama-gpu-amd:
+    profiles: ["gpu-amd"]
+    <<: *service-ollama
+    container_name: ollama-gpu-amd
+    image: ollama/ollama:rocm
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    devices:
+      - "/dev/kfd"
+      - "/dev/dri"
+
+  # Model initialization services
+  ollama-init-cpu:
+    profiles: ["cpu"]
+    image: ollama/ollama:latest
+    container_name: ollama-init-cpu
+    volumes:
+      - ollama_storage:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - "sleep 3; 
+         OLLAMA_HOST=ollama-cpu:11434 ollama pull qwen2.5-coder:7b && 
+         OLLAMA_HOST=ollama-cpu:11434 ollama pull nomic-embed-text && 
+         OLLAMA_HOST=ollama-cpu:11434 ollama pull smallthinker && 
+         OLLAMA_HOST=ollama-cpu:11434 ollama pull llama2-uncensored:7b && 
+         OLLAMA_HOST=ollama-cpu:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+    depends_on:
+      - ollama-cpu
+    networks:
+      - freya-net
+
+  ollama-init-gpu:
+    profiles: ["gpu-nvidia"]
+    image: ollama/ollama:latest
+    container_name: ollama-init-gpu
+    volumes:
+      - ollama_storage:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - "sleep 3; 
+         OLLAMA_HOST=ollama-gpu:11434 ollama pull qwen2.5-coder:7b && 
+         OLLAMA_HOST=ollama-gpu:11434 ollama pull nomic-embed-text && 
+         OLLAMA_HOST=ollama-gpu:11434 ollama pull smallthinker && 
+         OLLAMA_HOST=ollama-gpu:11434 ollama pull llama2-uncensored:7b && 
+         OLLAMA_HOST=ollama-gpu:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+    depends_on:
+      - ollama-gpu
+    networks:
+      - freya-net
+
+  ollama-init-gpu-amd:
+    profiles: ["gpu-amd"]
+    image: ollama/ollama:rocm
+    container_name: ollama-init-gpu-amd
+    volumes:
+      - ollama_storage:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - "sleep 3; 
+         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull qwen2.5-coder:7b && 
+         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull nomic-embed-text && 
+         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull smallthinker && 
+         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull llama2-uncensored:7b && 
+         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+    depends_on:
+      - ollama-gpu-amd
+    networks:
+      - freya-net
+
