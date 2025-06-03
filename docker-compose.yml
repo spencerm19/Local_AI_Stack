@@ -198,12 +198,12 @@ services:
     entrypoint: /bin/sh
     command:
       - "-c"
-      - "sleep 3; 
-         OLLAMA_HOST=ollama-cpu:11434 ollama pull qwen2.5-coder:7b && 
-         OLLAMA_HOST=ollama-cpu:11434 ollama pull nomic-embed-text && 
-         OLLAMA_HOST=ollama-cpu:11434 ollama pull smallthinker && 
-         OLLAMA_HOST=ollama-cpu:11434 ollama pull llama2-uncensored:7b && 
-         OLLAMA_HOST=ollama-cpu:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+      - |
+        sleep 3;
+        IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
+        for MODEL in "$${MODELS[@]}"; do
+          OLLAMA_HOST=ollama-cpu:11434 ollama pull $$MODEL;
+        done
     depends_on:
       - ollama-cpu
     networks:
@@ -218,12 +218,12 @@ services:
     entrypoint: /bin/sh
     command:
       - "-c"
-      - "sleep 3; 
-         OLLAMA_HOST=ollama-gpu:11434 ollama pull qwen2.5-coder:7b && 
-         OLLAMA_HOST=ollama-gpu:11434 ollama pull nomic-embed-text && 
-         OLLAMA_HOST=ollama-gpu:11434 ollama pull smallthinker && 
-         OLLAMA_HOST=ollama-gpu:11434 ollama pull llama2-uncensored:7b && 
-         OLLAMA_HOST=ollama-gpu:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+      - |
+        sleep 3;
+        IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
+        for MODEL in "$${MODELS[@]}"; do
+          OLLAMA_HOST=ollama-gpu:11434 ollama pull $$MODEL;
+        done
     depends_on:
       - ollama-gpu
     networks:
@@ -238,12 +238,12 @@ services:
     entrypoint: /bin/sh
     command:
       - "-c"
-      - "sleep 3; 
-         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull qwen2.5-coder:7b && 
-         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull nomic-embed-text && 
-         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull smallthinker && 
-         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull llama2-uncensored:7b && 
-         OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull sadiq-bd/llama3.2-1b-uncensored"
+      - |
+        sleep 3;
+        IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
+        for MODEL in "$${MODELS[@]}"; do
+          OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull $$MODEL;
+        done
     depends_on:
       - ollama-gpu-amd
     networks:
