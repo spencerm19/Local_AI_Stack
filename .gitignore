@@ -1,6 +1,5 @@
 # Environment variables
 .env
-.env template
 
 # Docker volumes
 shared/
