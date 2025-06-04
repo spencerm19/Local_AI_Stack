@@ -25,6 +25,7 @@ x-n8n: &service-n8n
     - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
     - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_JWT_SECRET}
     - N8N_SECURE_COOKIE=false
+    - N8N_PROTOCOL=http
     - NODE_ENV=production
   networks:
     - Systems-AI
@@ -81,6 +82,8 @@ services:
       - db
     environment:
       - WEBHOOK_TUNNEL_URL=${N8N_EDITOR_BASE_URL}
+      - N8N_SECURE_COOKIE=false
+      - N8N_PROTOCOL=http
 
   # Vector Database
   qdrant:
