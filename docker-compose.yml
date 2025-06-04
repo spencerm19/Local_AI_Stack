@@ -9,7 +9,7 @@ volumes:
   supabase_storage_data:
 
 networks:
-  freya-net:
+  Systems-AI:
     driver: bridge
 
 x-n8n: &service-n8n
@@ -27,7 +27,7 @@ x-n8n: &service-n8n
     - N8N_SECURE_COOKIE=false
     - NODE_ENV=production
   networks:
-    - freya-net
+    - Systems-AI
 
 x-ollama: &service-ollama
   image: ollama/ollama:latest
@@ -38,7 +38,7 @@ x-ollama: &service-ollama
     - OLLAMA_KEEP_ALIVE=24h
     - OLLAMA_HOST=0.0.0.0
   networks:
-    - freya-net
+    - Systems-AI
 
 services:
   # Database
@@ -50,7 +50,7 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
-      - freya-net
+      - Systems-AI
 
   # Storage
   storage:
@@ -65,7 +65,7 @@ services:
     volumes:
       - supabase_storage_data:/var/lib/storage
     networks:
-      - freya-net
+      - Systems-AI
 
   # n8n Workflow Automation
   n8n:
@@ -80,9 +80,7 @@ services:
     depends_on:
       - db
     environment:
-      - N8N_HOST=${N8N_HOST:-0.0.0.0}
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - N8N_PORT=${N8N_PORT:-5678}
+      - WEBHOOK_TUNNEL_URL=${N8N_EDITOR_BASE_URL}
 
   # Vector Database
   qdrant:
@@ -94,7 +92,7 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     networks:
-      - freya-net
+      - Systems-AI
 
   # Flow-based Programming Tool
   flowise:
@@ -104,12 +102,21 @@ services:
     environment:
       - PORT=3001
       - HOST=0.0.0.0
+      - FLOWISE_USERNAME=${FLOWISE_USERNAME:-admin}
+      - FLOWISE_PASSWORD=${FLOWISE_PASSWORD:-password}
+      - DEBUG=true
+      - DATABASE_PATH=/root/.flowise
+      - APIKEY_PATH=/root/.flowise
+      - SECRETKEY_PATH=/root/.flowise
+      - FLOWISE_SECRETKEY_OVERWRITE=${FLOWISE_SECRET_KEY:-Freyaai}
+      - CORS_ORIGINS=${FLOWISE_URL:-http://10.0.10.163:3001}
+      - EXECUTION_MODE=main
     ports:
       - "${FLOWISE_PORT:-3001}:3001"
     volumes:
       - flowise:/root/.flowise
     networks:
-      - freya-net
+      - Systems-AI
 
   # Web UI for Ollama
   open-webui-cpu:
@@ -128,7 +135,7 @@ services:
     volumes:
       - open-webui:/app/backend/data
     networks:
-      - freya-net
+      - Systems-AI
     depends_on:
       - ollama-cpu
 
@@ -148,7 +155,7 @@ services:
     volumes:
       - open-webui:/app/backend/data
     networks:
-      - freya-net
+      - Systems-AI
     depends_on:
       - ollama-gpu
       - ollama-gpu-amd
@@ -207,7 +214,7 @@ services:
     depends_on:
       - ollama-cpu
     networks:
-      - freya-net
+      - Systems-AI
 
   ollama-init-gpu:
     profiles: ["gpu-nvidia"]
@@ -227,7 +234,7 @@ services:
     depends_on:
       - ollama-gpu
     networks:
-      - freya-net
+      - Systems-AI
 
   ollama-init-gpu-amd:
     profiles: ["gpu-amd"]
@@ -247,5 +254,5 @@ services:
     depends_on:
       - ollama-gpu-amd
     networks:
-      - freya-net
+      - Systems-AI
 
