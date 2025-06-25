@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Environment variables
+.env
+*.env
+
+# Logs
+*.log
+logs/
+log/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Certificate files
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p7b
+*.p7c
+*.pfx
+*.p12
+*.sst
+
+# Temporary files
+*.tmp
+*.temp
+.*.swp
+.*.swo
+
+# Database
+*.sqlite3
+*.db
+
+# Local development
+local_settings.py 

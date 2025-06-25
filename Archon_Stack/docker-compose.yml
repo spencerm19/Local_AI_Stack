@@ -1,0 +1,112 @@
+volumes:
+  ollama_storage:
+  qdrant_storage:
+  open-webui:
+  archon_data:
+  supabase_db_data:
+
+networks:
+  Systems-AI:
+    driver: bridge
+
+services:
+  # Database
+  db:
+    image: supabase/postgres:15.1.0.117
+    restart: unless-stopped
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    networks:
+      - Systems-AI
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  # Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - Systems-AI
+
+  # Web UI for Ollama
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    container_name: open-webui
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    environment:
+      - OLLAMA_BASE_URLS=http://ollama-cpu:11434
+      - WEBUI_AUTH=${WEBUI_AUTH:-true}
+      - WEBUI_NAME=${WEBUI_NAME:-Archon AI Stack}
+      - WEBUI_URL=${WEBUI_URL:-http://localhost:3000}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - Systems-AI
+    depends_on:
+      - ollama-cpu
+
+  # Ollama CPU Service
+  ollama-cpu:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    networks:
+      - Systems-AI
+
+  # Archon Services
+  archon:
+    build:
+      context: ./archon
+      dockerfile: Dockerfile
+    container_name: archon
+    restart: unless-stopped
+    ports:
+      - "${ARCHON_PORT:-8501}:8501"
+      - "${ARCHON_SERVICE_PORT:-8100}:8100"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - OLLAMA_BASE_URL=http://ollama-cpu:11434
+    volumes:
+      - archon_data:/app/workbench
+    networks:
+      - Systems-AI
+    depends_on:
+      - db
+      - ollama-cpu
+      - qdrant
+
+  # Model initialization services
+  ollama-init-cpu:
+    profiles: ["cpu"]
+    image: ollama/ollama:latest
+    container_name: ollama-init-cpu
+    volumes:
+      - ollama_storage:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        sleep 3;
+        IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
+        for MODEL in "$${MODELS[@]}"; do
+          OLLAMA_HOST=ollama-cpu:11434 ollama pull $$MODEL;
+        done
+    depends_on:
+      - ollama-cpu
+    networks:
+      - Systems-AI 
