@@ -85,7 +85,7 @@ services:
 
   # Meta API
   meta:
-    image: supabase/postgres-meta:0.68.0
+    image: supabase/postgres-meta:v0.75.0
     restart: unless-stopped
     environment:
       PG_META_PORT: 8080
@@ -101,7 +101,7 @@ services:
 
   # Kong Gateway
   kong:
-    image: kong:2.8.1
+    image: kong:3.5.0
     restart: unless-stopped
     ports:
       - "${KONG_HTTP_PORT:-8000}:8000/tcp"
@@ -121,7 +121,7 @@ services:
 
   # Auth API
   auth:
-    image: supabase/gotrue:v2.132.3
+    image: supabase/auth:v2.139.1
     restart: unless-stopped
     environment:
       GOTRUE_API_HOST: 0.0.0.0
@@ -150,7 +150,7 @@ services:
 
   # REST API
   rest:
-    image: postgrest/postgrest:v11.2.2
+    image: postgrest/postgrest:v12.0.2
     restart: unless-stopped
     environment:
       PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
@@ -192,7 +192,7 @@ services:
 
   # Redis (for rate limiting)
   redis:
-    image: redis:7.0.12
+    image: redis:7.2.4
     restart: unless-stopped
     volumes:
       - supabase_redis_data:/data
@@ -201,7 +201,7 @@ services:
 
   # Storage API
   storage:
-    image: supabase/storage-api:v0.40.4
+    image: supabase/storage-api:v0.43.11
     restart: unless-stopped
     environment:
       ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYyNzIwNzUzMiwiZXhwIjoxOTc0MzYxNTMyfQ.eSq3o3ZTyWe6xc9r1VYHPMpACaH_9vWTqwzL0RA2UZI
@@ -243,7 +243,7 @@ services:
 
   # Studio API
   studio:
-    image: supabase/studio:latest
+    image: supabase/studio:v0.1.9
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-3020}:3000"
@@ -269,7 +269,7 @@ services:
     container_name: n8n
     restart: unless-stopped
     ports:
-      - "${N8N_PORT:-5678}:5678"
+      - "5678:5678"
     volumes:
       - n8n_storage:/home/node/.n8n
       - ./shared:/data/shared
@@ -279,7 +279,7 @@ services:
       - N8N_PROTOCOL=http
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
       ollama-cpu:
         condition: service_healthy
         required: false
@@ -371,16 +371,16 @@ services:
 
   # Ollama CPU Service
   ollama-cpu:
-    profiles: ["cpu"]
     <<: *service-ollama
+    profiles: ["cpu"]
     container_name: ollama-cpu
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
 
   # Ollama GPU Service (NVIDIA)
   ollama-gpu:
-    profiles: ["gpu-nvidia"]
     <<: *service-ollama
+    profiles: ["gpu-nvidia"]
     container_name: ollama-gpu
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
@@ -394,15 +394,15 @@ services:
 
   # Ollama GPU Service (AMD)
   ollama-gpu-amd:
-    profiles: ["gpu-amd"]
     <<: *service-ollama
+    profiles: ["gpu-amd"]
     container_name: ollama-gpu-amd
     image: ollama/ollama:rocm
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     devices:
-      - "/dev/kfd"
-      - "/dev/dri"
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
 
   # Model initialization services
   ollama-init-cpu:
