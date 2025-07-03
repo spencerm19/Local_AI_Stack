@@ -14,7 +14,7 @@ networks:
     driver: bridge
 
 x-n8n: &service-n8n
-  image: n8nio/n8n:latest
+  image: n8nio/n8n:1.24.1
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=db
@@ -32,7 +32,7 @@ x-n8n: &service-n8n
     - Systems-AI
 
 x-ollama: &service-ollama
-  image: ollama/ollama:latest
+  image: ollama/ollama:0.1.29
   restart: unless-stopped
   volumes:
     - ollama_storage:/root/.ollama
@@ -85,7 +85,7 @@ services:
 
   # Meta API
   meta:
-    image: supabase/postgres-meta:latest
+    image: supabase/postgres-meta:0.68.0
     restart: unless-stopped
     environment:
       PG_META_PORT: 8080
@@ -121,7 +121,7 @@ services:
 
   # Auth API
   auth:
-    image: supabase/gotrue:latest
+    image: supabase/gotrue:v2.132.3
     restart: unless-stopped
     environment:
       GOTRUE_API_HOST: 0.0.0.0
@@ -150,7 +150,7 @@ services:
 
   # REST API
   rest:
-    image: postgrest/postgrest:latest
+    image: postgrest/postgrest:v11.2.2
     restart: unless-stopped
     environment:
       PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
@@ -166,7 +166,7 @@ services:
 
   # Realtime API
   realtime:
-    image: supabase/realtime:latest
+    image: supabase/realtime:v2.25.50
     restart: unless-stopped
     environment:
       PORT: 4000
@@ -201,7 +201,7 @@ services:
 
   # Storage API
   storage:
-    image: supabase/storage-api:latest
+    image: supabase/storage-api:v0.40.4
     restart: unless-stopped
     environment:
       ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYyNzIwNzUzMiwiZXhwIjoxOTc0MzYxNTMyfQ.eSq3o3ZTyWe6xc9r1VYHPMpACaH_9vWTqwzL0RA2UZI
@@ -232,7 +232,7 @@ services:
 
   # Image Transformation
   imgproxy:
-    image: darthsim/imgproxy:latest
+    image: darthsim/imgproxy:v3.21
     restart: unless-stopped
     environment:
       IMGPROXY_BIND: ":5001"
@@ -243,7 +243,7 @@ services:
 
   # Studio API
   studio:
-    image: supabase/studio:latest
+    image: supabase/studio:20240320-4f0d3c9
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-3020}:3000"
