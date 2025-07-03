@@ -1,0 +1,60 @@
+# Server Configuration
+SERVER_IP=localhost  # Host IP address
+
+# Database Configuration
+POSTGRES_USER=postgres
+POSTGRES_DB=systems-ai
+POSTGRES_PASSWORD="Hell0W0rld!@#"
+
+# Supabase Configuration
+JWT_SECRET="HelloWorld!@#"
+KONG_HTTP_PORT=8000
+KONG_HTTPS_PORT=8443
+STUDIO_PORT=3020
+API_EXTERNAL_URL=http://localhost:8000
+SITE_URL=http://localhost:3000
+PUBLIC_URL=http://localhost:8000
+ADDITIONAL_REDIRECT_URLS=
+DISABLE_SIGNUP=false
+JWT_EXPIRY=3600
+ENABLE_EMAIL_AUTOCONFIRM=true
+ENABLE_EMAIL_CHANGE=true
+PROJECT_REF=default
+ORGANIZATION_NAME=Local AI Stack
+PROJECT_NAME=Local AI Stack Project
+
+# n8n Configuration
+N8N_HOST=0.0.0.0
+N8N_PORT=5678
+N8N_PROTOCOL=https
+N8N_EDITOR_BASE_URL=http://localhost:5678
+N8N_WEBHOOK_URL=http://localhost:5678
+N8N_ENCRYPTION_KEY="HelloWorld!@#"
+N8N_JWT_SECRET="HelloWorld!@#"
+N8N_SECURE_COOKIE=false
+
+# Storage Configuration
+#STORAGE_REGION=us-east-1
+#STORAGE_S3_BUCKET=your-bucket-name
+
+# Web UI Configuration
+WEBUI_NAME=Local-AI-Stack
+WEBUI_PORT=3000
+WEBUI_URL=http://localhost:3000
+WEBUI_AUTH=true
+WEBUI_SECRET_KEY="HelloWorld!@#"
+
+# Service Ports
+QDRANT_PORT=6333
+FLOWISE_PORT=3001
+OLLAMA_PORT=11434
+N8N_PORT=5678
+
+# Flowise Configuration
+FLOWISE_USERNAME=admin
+FLOWISE_PASSWORD="HelloWorld!@#"
+FLOWISE_SECRET_KEY="HelloWorld!@#"
+FLOWISE_URL=http://localhost:3001
+
+# Ollama Configuration
+OLLAMA_MODELS=qwen2.5-coder:7b,nomic-embed-text,mxbai-embed-large:latest,dolphin-phi:latest,wizard-vicuna-uncensored:latest

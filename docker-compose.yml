@@ -243,7 +243,7 @@ services:
 
   # Studio API
   studio:
-    image: supabase/studio:20240320-4f0d3c9
+    image: supabase/studio:latest
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-3020}:3000"
