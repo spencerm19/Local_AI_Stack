@@ -4,8 +4,13 @@ This project combines several powerful AI and development tools into a single, e
 
 - Ollama (AI model serving)
 - n8n (Workflow automation)
-- Supabase (Database and storage)
-- Qdrant (Vector database)
+- Supabase (Full-stack database platform)
+  - PostgreSQL Database
+  - Auth API
+  - REST API
+  - Realtime API
+  - Storage API
+  - Studio UI
 - Flowise (Flow-based programming)
 - Open WebUI (UI for Ollama)
 
@@ -54,7 +59,8 @@ After starting, the following services will be available:
 - n8n: http://localhost:5678
 - Open WebUI: http://localhost:3000
 - Flowise: http://localhost:3001
-- Qdrant: http://localhost:6333
+- Supabase Studio: http://localhost:3020
+- Supabase API: http://localhost:8000
 - Supabase PostgreSQL: localhost:5432
 
 ## Environment Variables
@@ -62,10 +68,49 @@ After starting, the following services will be available:
 Key environment variables in `.env`:
 
 - `POSTGRES_PASSWORD`: Password for PostgreSQL database
+- `POSTGRES_USER`: PostgreSQL username (default: postgres)
+- `POSTGRES_DB`: Database name (default: postgres)
+- `JWT_SECRET`: Secret key for JWT tokens
 - `N8N_ENCRYPTION_KEY`: Encryption key for n8n
 - `N8N_JWT_SECRET`: JWT secret for n8n
 - `STORAGE_REGION`: Region for S3-compatible storage
 - `STORAGE_S3_BUCKET`: Bucket name for S3-compatible storage
+
+## Supabase Features
+
+The Supabase integration includes:
+
+1. **Authentication & Authorization**
+   - Built-in user management
+   - Row Level Security (RLS)
+   - OAuth providers support
+   - JWT token management
+
+2. **Database**
+   - PostgreSQL database with extensions
+   - Database backups and point-in-time recovery
+   - Database webhooks
+
+3. **Real-time**
+   - Live database changes
+   - Presence detection
+   - Broadcast messages
+
+4. **Storage**
+   - Large file handling
+   - Image transformations
+   - Secure file uploads
+
+5. **Auto-generated APIs**
+   - REST and GraphQL APIs
+   - Instant API documentation
+   - Direct database access
+
+6. **Dashboard**
+   - Database management
+   - User management
+   - API monitoring
+   - Storage management
 
 ## GPU Support
 
@@ -87,7 +132,6 @@ All data is persisted in Docker volumes:
 
 - `n8n_storage`: n8n workflows and data
 - `ollama_storage`: Ollama models
-- `qdrant_storage`: Vector database data
 - `supabase_db_data`: PostgreSQL database
 - `supabase_storage_data`: File storage
 - Other volumes for various services

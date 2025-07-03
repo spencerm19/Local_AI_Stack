@@ -1,12 +1,13 @@
 volumes:
   n8n_storage:
   ollama_storage:
-  qdrant_storage:
   open-webui:
   flowise:
   valkey-data:
   supabase_db_data:
   supabase_storage_data:
+  supabase_kong_data:
+  supabase_redis_data:
 
 networks:
   Systems-AI:
@@ -38,6 +39,12 @@ x-ollama: &service-ollama
   environment:
     - OLLAMA_KEEP_ALIVE=24h
     - OLLAMA_HOST=0.0.0.0
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+    start_period: 30s
   networks:
     - Systems-AI
 
@@ -50,23 +57,211 @@ services:
       - supabase_db_data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    networks:
+      - Systems-AI
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - log_min_messages=fatal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      ollama-cpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu-amd:
+        condition: service_healthy
+        required: false
+
+  # Meta API
+  meta:
+    image: supabase/postgres-meta:latest
+    restart: unless-stopped
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_DB_USER: ${POSTGRES_USER:-postgres}
+      PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Kong Gateway
+  kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000/tcp"
+      - "${KONG_HTTPS_PORT:-8443}:8443/tcp"
+    volumes:
+      - supabase_kong_data:/var/lib/kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Auth API
+  auth:
+    image: supabase/gotrue:latest
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      MAILER_SECURE_EMAIL_CHANGE_ENABLED: ${ENABLE_EMAIL_CHANGE:-true}
+      MAILER_URLPATHS_INVITE: /auth/v1/verify
+      MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # REST API
+  rest:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMA: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Realtime API
+  realtime:
+    image: supabase/realtime:latest
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYxHE1U5P+h2osuOE8oHdblzwZHOo4f35
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Redis (for rate limiting)
+  redis:
+    image: redis:7.0.12
+    restart: unless-stopped
+    volumes:
+      - supabase_redis_data:/data
     networks:
       - Systems-AI
 
-  # Storage
+  # Storage API
   storage:
     image: supabase/storage-api:latest
-    depends_on:
-      - db
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      REGION: ${STORAGE_REGION}
-      GLOBAL_S3_BUCKET: ${STORAGE_S3_BUCKET}
+      ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYyNzIwNzUzMiwiZXhwIjoxOTc0MzYxNTMyfQ.eSq3o3ZTyWe6xc9r1VYHPMpACaH_9vWTqwzL0RA2UZI
+      SERVICE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjI3MjA3NTMyLCJleHAiOjE5NzQzNjE1MzJ9.M4hrAUDOP-S2qXF_shrb_v3qm5TI4Hs0n_QHMhPzvkg
+      PROJECT_REF: ${PROJECT_REF:-default}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: ${STORAGE_REGION:-us-east-1}
+      GLOBAL_S3_BUCKET: ${STORAGE_S3_BUCKET:-storage}
+      ENABLE_IMAGE_TRANSFORMATION: "true"
+      IMGPROXY_URL: http://imgproxy:5001
     volumes:
       - supabase_storage_data:/var/lib/storage
     networks:
       - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+      imgproxy:
+        condition: service_started
+
+  # Image Transformation
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: ":5001"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: "true"
+    networks:
+      - Systems-AI
+
+  # Studio API
+  studio:
+    image: supabase/studio:latest
+    restart: unless-stopped
+    ports:
+      - "${STUDIO_PORT:-3020}:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: ${ORGANIZATION_NAME:-Default Organization}
+      DEFAULT_PROJECT_NAME: ${PROJECT_NAME:-Default Project}
+      SUPABASE_PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYyNzIwNzUzMiwiZXhwIjoxOTc0MzYxNTMyfQ.eSq3o3ZTyWe6xc9r1VYHPMpACaH_9vWTqwzL0RA2UZI
+      SUPABASE_SERVICE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjI3MjA3NTMyLCJleHAiOjE5NzQzNjE1MzJ9.M4hrAUDOP-S2qXF_shrb_v3qm5TI4Hs0n_QHMhPzvkg
+    networks:
+      - Systems-AI
+    depends_on:
+      db:
+        condition: service_healthy
+      meta:
+        condition: service_started
 
   # n8n Workflow Automation
   n8n:
@@ -78,24 +273,22 @@ services:
     volumes:
       - n8n_storage:/home/node/.n8n
       - ./shared:/data/shared
-    depends_on:
-      - db
     environment:
       - WEBHOOK_TUNNEL_URL=${N8N_EDITOR_BASE_URL}
       - N8N_SECURE_COOKIE=false
       - N8N_PROTOCOL=http
-
-  # Vector Database
-  qdrant:
-    image: qdrant/qdrant
-    container_name: qdrant
-    restart: unless-stopped
-    ports:
-      - "${QDRANT_PORT:-6333}:6333"
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    networks:
-      - Systems-AI
+    depends_on:
+      db:
+        condition: service_started
+      ollama-cpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu-amd:
+        condition: service_healthy
+        required: false
 
   # Flow-based Programming Tool
   flowise:
@@ -112,7 +305,7 @@ services:
       - APIKEY_PATH=/root/.flowise
       - SECRETKEY_PATH=/root/.flowise
       - FLOWISE_SECRETKEY_OVERWRITE=${FLOWISE_SECRET_KEY:-Freyaai}
-      - CORS_ORIGINS=${FLOWISE_URL:-http://10.0.10.163:3001}
+      - CORS_ORIGINS=${FLOWISE_URL:-http://localhost:3001}
       - EXECUTION_MODE=main
     ports:
       - "${FLOWISE_PORT:-3001}:3001"
@@ -120,6 +313,16 @@ services:
       - flowise:/root/.flowise
     networks:
       - Systems-AI
+    depends_on:
+      ollama-cpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu:
+        condition: service_healthy
+        required: false
+      ollama-gpu-amd:
+        condition: service_healthy
+        required: false
 
   # Web UI for Ollama
   open-webui-cpu:
@@ -140,7 +343,8 @@ services:
     networks:
       - Systems-AI
     depends_on:
-      - ollama-cpu
+      ollama-cpu:
+        condition: service_healthy
 
   open-webui-gpu:
     profiles: ["gpu-nvidia", "gpu-amd"]
@@ -160,8 +364,10 @@ services:
     networks:
       - Systems-AI
     depends_on:
-      - ollama-gpu
-      - ollama-gpu-amd
+      ollama-gpu:
+        condition: service_healthy
+      ollama-gpu-amd:
+        condition: service_healthy
 
   # Ollama CPU Service
   ollama-cpu:
@@ -209,13 +415,19 @@ services:
     command:
       - "-c"
       - |
-        sleep 3;
+        echo "Waiting for Ollama to be ready...";
+        while ! curl -s http://ollama-cpu:11434/api/version > /dev/null; do
+          sleep 2;
+        done;
+        echo "Ollama is ready. Starting model downloads...";
         IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
         for MODEL in "$${MODELS[@]}"; do
+          echo "Pulling model: $$MODEL";
           OLLAMA_HOST=ollama-cpu:11434 ollama pull $$MODEL;
         done
     depends_on:
-      - ollama-cpu
+      ollama-cpu:
+        condition: service_healthy
     networks:
       - Systems-AI
 
@@ -229,13 +441,19 @@ services:
     command:
       - "-c"
       - |
-        sleep 3;
+        echo "Waiting for Ollama to be ready...";
+        while ! curl -s http://ollama-gpu:11434/api/version > /dev/null; do
+          sleep 2;
+        done;
+        echo "Ollama is ready. Starting model downloads...";
         IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
         for MODEL in "$${MODELS[@]}"; do
+          echo "Pulling model: $$MODEL";
           OLLAMA_HOST=ollama-gpu:11434 ollama pull $$MODEL;
         done
     depends_on:
-      - ollama-gpu
+      ollama-gpu:
+        condition: service_healthy
     networks:
       - Systems-AI
 
@@ -249,13 +467,19 @@ services:
     command:
       - "-c"
       - |
-        sleep 3;
+        echo "Waiting for Ollama to be ready...";
+        while ! curl -s http://ollama-gpu-amd:11434/api/version > /dev/null; do
+          sleep 2;
+        done;
+        echo "Ollama is ready. Starting model downloads...";
         IFS=',' read -ra MODELS <<< "${OLLAMA_MODELS}";
         for MODEL in "$${MODELS[@]}"; do
+          echo "Pulling model: $$MODEL";
           OLLAMA_HOST=ollama-gpu-amd:11434 ollama pull $$MODEL;
         done
     depends_on:
-      - ollama-gpu-amd
+      ollama-gpu-amd:
+        condition: service_healthy
     networks:
       - Systems-AI
 
